@@ -30,3 +30,5 @@ cudaError_t cudaMemcpy(void * dst, const void * src, size_t size, enum cudaMemcp
 - 2차원, 3차원 데이터 복사를 돕는 cudaMemcpy2D(), cudaMemcpy3D()
 - 비동기 복사를 돕는 cudaMemcpyAsync(), cudaMemcpy2DAsync(), cudaMemcpy3DAsync()
 
+# 커널 함수 호출 동기화
+cudaError_t cudaDeviceSynchronize();
