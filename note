@@ -1,0 +1,32 @@
+# 함수 실행 공간 지정 키워드
+- __host__ : host에서 호출, host에서 실행
+- __device__ : device에서 호출, device에서 실행
+- __global__ : host에서 호출되지만 device에서 실행
+
+# 디바이스 메모리 할당
+cudaError_t cudaMalloc(void ** ptr, size_t size);
+
+# 디바이스 메모리 해제
+cudaError_t cudaFree(void * ptr);
+
+# 디바이스 메모리 초기화
+cudaError_t cudaMemset(void * ptr, int value, size_t size);
+
+# 에러 코드 확인
+__host__ __device__ const char* cudaGetErrorName (cudaError_t error);
+
+# 디바이스 메모리 사용량 확인
+cudaError_t cudaMemGetInfo(size_t * free, size_t * total);
+
+# 장치간 데이터 복사
+cudaError_t cudaMemcpy(void * dst, const void * src, size_t size, enum cudaMemcpyKind kind);
+
+- cudaMemcpyHostToHost: 호스트 메모리 -> 호스트 메모리
+- cudaMemcpyHostToDevice: 호스트 메모리 -> 디바이스 메모리
+- cudaMemcpyDeviceToHost: 디바이스 메모리 -> 호스트 메모리
+- cudaMemcpyDeviceToDevice: 디바이스 메모리 -> 디바이스 메모리
+- cudaMemcpyDefault: dst와 src의 포인터 값에 의해 결정 (unified virtual addressing을 지원하는 시스템에서만 사용 가능)
+
+- 2차원, 3차원 데이터 복사를 돕는 cudaMemcpy2D(), cudaMemcpy3D()
+- 비동기 복사를 돕는 cudaMemcpyAsync(), cudaMemcpy2DAsync(), cudaMemcpy3DAsync()
+
