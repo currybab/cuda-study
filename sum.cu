@@ -6,11 +6,13 @@
 #include "device_launch_parameters.h"
 #include "DS_timer.h"
 
-#define NUM_DATA 1024
+#define NUM_DATA 1024*1024
 
-__global__ void vecAdd(int* _a, int* _b, int* _c) {
-    int tID = threadIdx.x;
-    _c[tID] = _a[tID] + _b[tID];
+__global__ void vecAdd(int* _a, int* _b, int* _c, int n) {
+    int tID = blockIdx.x * blockDim.x + threadIdx.x;
+    if (tID < n) {
+        _c[tID] = _a[tID] + _b[tID];
+    }
 }
 
 int main(void) {
@@ -60,7 +62,10 @@ int main(void) {
 
     // kernel launch
     timer.onTimer(1);
-    vecAdd<<<1, NUM_DATA>>>(d_a, d_b, d_c);
+    int threadsPerBlock = 256;
+    int blocksPerGrid = (NUM_DATA + threadsPerBlock - 1) / threadsPerBlock;
+    vecAdd<<<blocksPerGrid, threadsPerBlock>>>(d_a, d_b, d_c, NUM_DATA);
+    cudaDeviceSynchronize(); // Wait for the kernel to complete
     timer.offTimer(1);
     
     // data copy: device -> host
