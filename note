@@ -32,3 +32,21 @@ cudaError_t cudaMemcpy(void * dst, const void * src, size_t size, enum cudaMemcp
 
 # 커널 함수 호출 동기화
 cudaError_t cudaDeviceSynchronize();
+
+# 스레드 레이아웃
+- 워프 : 32개의 스레드
+- 블록이 가지는 최대 스레드 수 : 1024
+
+# gpu 정보 확인
+cudaError_t cudaGetDeviceProperties(cudaDeviceProp* prop, int deviceID)
+- name : GPU 이름
+- major : GPU의 메이저 버전
+- minor : GPU의 마이너 버전
+- multiProcessorCount : GPU의 멀티 프로세서(SM) 수
+- totalGlobalMem : GPU의 총 메모리 크기
+
+# 시스템 내부 gpu의 개수
+cudaError_t cudaGetDeviceCount(int * count)
+
+# SM당 CUDA 코어의 갯수
+int _ConvertSMVer2Cores(int major, int minor)
