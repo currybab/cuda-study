@@ -7,15 +7,16 @@
 #include <string.h>
 
 #define DO_CPU
-#define DATA_TYPE int
+#define DATA_TYPE float
 
 // Matrix size
 #define SIZE_M (512*2)
 #define SIZE_N (512*4)
 #define SIZE_K (512*2)
 
-#define BLOCK_SIZE 8
-// 32: 55.81ms, 16: 17.47ms, 8: 10.43ms
+#define BLOCK_SIZE 32
+// int - 32: 55.81ms, 16: 17.47ms, 8: 10.43ms	
+// float - 32: 56.48ms, 16: 17.78ms, 8: 29.55ms
 
 template<class T> void allocNinitMem(T** p, long long size, double* memUsage = NULL);
 bool compareMatrix(DATA_TYPE* _A, DATA_TYPE* _B, int _size);
@@ -32,7 +33,8 @@ __global__ void MatMul(DATA_TYPE* matA, DATA_TYPE* matB, DATA_TYPE* matC, int m,
 	if (row >= m || col >= n) return;
 	matC[index] = 0;
 	for (int i = 0; i < k; i++)
-		matC[index] += (matA[row * k + i] * matB[i * n + col]);
+		// matC[index] += (matA[row * k + i] * matB[i * n + col]);
+		matC[index] += __fmul_rn(matA[row * k + i], matB[i * n + col]);
 }
 
 
@@ -162,7 +164,7 @@ bool compareMatrix(DATA_TYPE* _A, DATA_TYPE* _B, int _size)
 	bool isMatched = true;
 	for (int i = 0; i < _size; i++) {
 		if (_A[i] != _B[i]) {
-			printf("[%d] not matched! (%d, %d)\n", i, _A[i], _B[i]);
+			printf("[%d] not matched! (%f, %f)\n", i, _A[i], _B[i]);
 			getchar();
 			isMatched = false;
 		}
