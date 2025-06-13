@@ -14,6 +14,9 @@
 #define SIZE_N (512*4)
 #define SIZE_K (512*2)
 
+#define BLOCK_SIZE 8
+// 32: 55.81ms, 16: 17.47ms, 8: 10.43ms
+
 template<class T> void allocNinitMem(T** p, long long size, double* memUsage = NULL);
 bool compareMatrix(DATA_TYPE* _A, DATA_TYPE* _B, int _size);
 
@@ -110,7 +113,7 @@ int main(int argc, char* argv[])
 	// 
 	// dim3 gridDim(?, ?);
 	// dim3 blockDim(?, ?);
-	#define BLOCK_SIZE 32
+
 	dim3 gridDim(ceil((float)m / BLOCK_SIZE), ceil((float)n / BLOCK_SIZE));
 	dim3 blockDim(BLOCK_SIZE, BLOCK_SIZE);
 	printf("Grid(%d, %d), Block(%d, %d)\n", gridDim.x, gridDim.y, blockDim.x, blockDim.y);
@@ -159,7 +162,7 @@ bool compareMatrix(DATA_TYPE* _A, DATA_TYPE* _B, int _size)
 	bool isMatched = true;
 	for (int i = 0; i < _size; i++) {
 		if (_A[i] != _B[i]) {
-			            printf("[%d] not matched! (%d, %d)\n", i, _A[i], _B[i]);
+			printf("[%d] not matched! (%d, %d)\n", i, _A[i], _B[i]);
 			getchar();
 			isMatched = false;
 		}
