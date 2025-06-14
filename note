@@ -51,6 +51,7 @@ cudaError_t cudaGetDeviceCount(int * count)
 # SM당 CUDA 코어의 갯수
 int _ConvertSMVer2Cores(int major, int minor)
 
+
 # 스레드 수준 메모리
 - 레지스터
     - 커널 내부에서 선언된 지역 변수(local variable)를 위해 사용
@@ -172,6 +173,36 @@ int _ConvertSMVer2Cores(int major, int minor)
     - `Occupancy = (# of active warps) / (# of maximum warps)`
     - SM의 최대 워프수 대비 활성 워프 비율. 높은 occupancy는 높은 병렬성을 의미.
     - cuda occupancy calculator 찾아서 다운받아서 사용.
+
+# 블록 내 스레들에 대한 동기화
+__syncthreads()
+블록 내 모든 스레드가 해당 지점에 도착할 때까지 다른 스레드들의 진행을 막음
+
+# 사용자 관리 캐시
+- 알고리즘의 특성을 기반으로 데이터 접근 패턴을 파악하고, 그에 따라 사용자가 직접 목표 데이터를 공유 메모리 영역으로 
+  load하거나 내리면서(write-back) 공유 메모리를 캐시처럼 사용하는 것
+- 적절히 사용할시 HW 관리 캐시로 사용하는 경우보다 높은 성능을 얻을 수 있음. 커널 성능을 최적화 하는 주요 기법 중 하나.
+- 전략의 핵심은 블록 내 스레드들이 자주 접근하는 데이터를 공유 메모리에 가져다 놓음으로써, 
+  전역 메모리(디바이스 메모리 영역) 접근 수를 줄이는 것
+
+# 단일 스레드 블록을 사용하는 행렬의 곱셈
+- 입력 행렬 A: ROW_SIZE * K_SIZE, B: K_SIZE * COL_SIZE, 출력 행렬 C: ROW_SIZE * COL_SIZE
+- 문제 확인 (공유 메모리 사용하지 않을 경우)
+    - 입력행렬 A와 B의 원소들은 각각 COL_SIZE와 ROW_SIZE번씩 접근됨.
+    - 출력행렬 C의 원소들은 결과를 쓰기 위해 한번만 접근하면됨.
+    - 전역 메모리에 대한 접근 횟수는 2 * (ROW_SIZE * COL_SIZE * K_SIZE) + ROW_SIZE * COL_SIZE로
+      O(ROW_SIZE * COL_SIZE * K_SIZE)로 추정됨.
+- 행렬 A와 B의 운소들은 반복해서 접근하기에 공유 메모리에 올려 놓으면 전역 메모리 접근횟수를 줄일 수 있음.
+    - 이경우 전역 메모리에 대한 접근 횟수는 ROW_SIZE * K_SIZE + COL_SIZE * K_SIZE + ROW_SIZE * COL_SIZE로
+      O((ROW_SIZE + COL_SIZE) * K_SIZE)로 추정됨.
+    - 공유 메모리를 사용하지 않는 경우 대비 접근횟수를 1/ROW_SIZE 또는 1/COL_SIZE 수준으로 크게 감소.
+- __shared__ 키워드를 사용해서 정적 할당 방식으로 메모리 공간 할당
+- 전역 메모리에서 공유 메모리로 데이터를 복사
+    - 대표 스레드가 전담 (비효율적)
+    - 행렬 B는 col을 기준으로 데이터를 복사하며, 각 열에서 하나의 스레드만 데이터 복사에 참여,
+      행렬 A는 row를 기준으로 데이터를 복사하며, 각 행에서 하나의 스레드만 데이터 복사에 참여
+- 오류를 방지하기 위해 모든 스레드를 동기화 작업이 필요 __syncthreads()
+- 공유 메모리 미 사용시보다 약 2.5배 높은 성능.
 
 
 
