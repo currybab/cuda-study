@@ -30,26 +30,34 @@ __global__ void MatMul_SharedMem(DATA_TYPE* matA, DATA_TYPE* matB, DATA_TYPE* ma
 	__shared__ DATA_TYPE sA[BLOCK_SIZE][BLOCK_SIZE];
 	__shared__ DATA_TYPE sB[BLOCK_SIZE][BLOCK_SIZE];
 
+	DATA_TYPE val = 0;
 	int row = blockDim.x * blockIdx.x + threadIdx.x;
 	int col = blockDim.y * blockIdx.y + threadIdx.y;
+	int localRow = threadIdx.x;
+	int localCol = threadIdx.y;
 	for (int d = 0; d < ceil((float) k / BLOCK_SIZE); d++) {
-		int sRow = d * BLOCK_SIZE + threadIdx.x;
-		int sCol = d * BLOCK_SIZE + threadIdx.y;
-
-		if (sRow >= k || sCol >= k) {
-			continue;
+		int sRow = d * BLOCK_SIZE + localRow;
+		int sCol = d * BLOCK_SIZE + localCol;
+		if (row >= m || sCol >= k) {
+			sA[localRow][localCol] = 0;
+		} else {
+			sA[localRow][localCol] = matA[row * k + sCol];
 		}
-		sA[threadIdx.x][threadIdx.y] = matA[row * k + sCol];
-		sB[threadIdx.x][threadIdx.y] = matB[sRow * n + col];
-
+		if (sRow >= k || col >= n) {
+			sB[localRow][localCol] = 0;
+		} else {
+			sB[localRow][localCol] = matB[sRow * n + col];
+		}
 		__syncthreads();
-		DATA_TYPE val = matC[row * n + col];
 		for (int i = 0; i < BLOCK_SIZE; i++) {
-			val += __fmul_rn(sA[threadIdx.x][i], sB[i][threadIdx.y]);
+			val += __fmul_rn(sA[localRow][i], sB[i][localCol]);
 		}
-		matC[row * n + col] = val;
 		__syncthreads();
 	}
+	if (row >= m || col >= n) {
+		return;
+	}
+	matC[row * n + col] = val;
 }
 /******************************************************************
 ******************************************************************/
