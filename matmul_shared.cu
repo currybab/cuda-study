@@ -39,9 +39,9 @@ __global__ void MatMul_SharedMem(DATA_TYPE* matA, DATA_TYPE* matB, DATA_TYPE* ma
 		int sRow = d * BLOCK_SIZE + localRow;
 		int sCol = d * BLOCK_SIZE + localCol;
 		if (row >= m || sCol >= k) {
-			sA[localRow][localCol] = 0;
+			sA[localCol][localRow] = 0;
 		} else {
-			sA[localRow][localCol] = matA[row * k + sCol];
+			sA[localCol][localRow] = matA[row * k + sCol];
 		}
 		if (sRow >= k || col >= n) {
 			sB[localRow][localCol] = 0;
@@ -50,7 +50,7 @@ __global__ void MatMul_SharedMem(DATA_TYPE* matA, DATA_TYPE* matB, DATA_TYPE* ma
 		}
 		__syncthreads();
 		for (int i = 0; i < BLOCK_SIZE; i++) {
-			val += __fmul_rn(sA[localRow][i], sB[i][localCol]);
+			val += __fmul_rn(sA[i][localRow], sB[i][localCol]);
 		}
 		__syncthreads();
 	}
