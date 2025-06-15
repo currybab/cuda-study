@@ -36,6 +36,7 @@ cudaError_t cudaDeviceSynchronize();
 # 스레드 레이아웃
 - 워프 : 32개의 스레드
 - 블록이 가지는 최대 스레드 수 : 1024
+- 워프 < 쓰레드 블록 < 그리드
 
 # gpu 정보 확인
 cudaError_t cudaGetDeviceProperties(cudaDeviceProp* prop, int deviceID)
@@ -244,4 +245,101 @@ __syncthreads()
     - 뱅크 충돌이 발생하면 해당 뱅크 영역에 대한 접근이 직렬화되어 커널 성능 저하로 이어짐.
 - 행렬곱셈(x,y) 구조에서 공유 메모리에 데이터 저장시 전치를 함으로써 뱅크 충돌을 최소화할 수 있음.
 
-    
+# 동기화
+- 둘 이상의 연산 주체가 서로 정보를 교환하는 행위
+- 특정 정보를 공유하는 것과 서로 실행 순서를 맞추는 것으로 할 수 있음.
+    - 장벽(barrier): 모든 스레드가 특정 지점에 도착할 때까지 다른 스레드들의 진행을 막음
+    - 상호 배제(mutual exclusion): 특정 영역의 작업을 한번에 하나의 스레드만 수행하도록 함.
+- 동기화 함수: 장벽 역할을 수행하며, 동기화 범위에 따라 다른 함수 제공
+    - 블록 수준 동기화 : __syncthreads()
+    - 워프 수준 동기화 : __syncwarp()
+    - 그리드(커널) 수준 동기화 : 따로 제공 되지 않음. 호출 및 종료 시점에 암묵적 동기화가 수행. 커널 분리로 구현해야함.
+- 동기화는 커널의 성능을 떨어뜨리는 주요 병목 지접이기 때문에 동기화 수준에 따른 적절한 선택이 중요.
+- 원자 함수: 상호 배제 역할을 수행함. 한번에 하나의 스레드만 해당 데이터에 접근할 수 있도록 보장.
+    - 한 스레드가 특정 데이터에 원자함수로 접근하는 동안에는 다른 스레드는 접근 불가
+    - read-modify-write를 한번의 연산으로 수행하며 전역 메모리 및 공유 메모리에 있는 데이터에 적용할 수 있음.
+    - 산술 함수와 비트 단위 함수로 나뉨.
+- 총 실행된 스레드 카운트 예시
+    - 전체 스레드에 대해 원자함수 하나로(10배 이상 느려짐)
+    - 각 스레드 블록에 대해 __syncthreads()로 atomicAdd를 수행하고 grid level에서 atomicAdd를 수행
+    - 각 워프에 대해 하는것도 생각해 볼 수 있음. 그래도 꽤 빠름.
+- 수동 제어(mutual control)
+    - 수동 동기화 제어를 위해 사용할 수 있는 대표적인 도구 세가지는 스레드 번호, 원자 함수, 동기화 함수
+    - 필요하면 spin lock while(조건); 사용
+- 불필요한 동기화 사용을 자제해야 하며, 동기화를 최소화하도록 알고리즘을 설계해야함.
+  동기화 범위(동기화에 참여하는 스레드의 수)를 최소화하는 것도 중요.
+
+# CUDA 스트림
+- 호스트와 디바이스 사이의 명령 전달 통로.
+- NULL 스트림: 암묵적으로 선언된 스트림, 사용할 스트림을 명시하지 않았을 때 사용되는 기본 스트림(디바이스당 하나만 존재)
+- Non-NULL 스트림: 사용자가 명시적으로 생성 및 사용하는 스트림, 사용자 필요에 따라 여러개 생성해서 사용 가능
+- 호스트에서 하나의 스트림을 통해 전달하는 명령들은 순서대로 스트림에 쌓이며, 디바이스는 먼저 들어온 명령대로 하나씩 순차 처리
+- 서로 다른 스트림 사이의 실행 순서는 비결정적임.
+- 또한 서로 다른 스트림은 비동기적으로 동작함. 
+- 디바이스의 성능 및 상태에 따라 둘 이상의 스트림에 있는 명령이 동시에 처리될 수 있음.
+- 비동기적 실행 특성은 디바이스의 동시 실행 능력과 함께 CUDA 프로그램의 성능을 높이기 위해 활용될 수 있음.
+- Non-NULL 스트림 생성 및 제거
+    - 생성: cudaError_t cudaStreamCreate(cudaStream_t *stream)
+    - 제거: cudaError_t cudaStreamDestroy(cudaStream_t stream)
+    - 스트림 생성 후 커널 호출 시 스트림을 네번째 인자로 전달, 중간에 사용하지 않는 인자가 있더라도 0으로 지정해줄 것
+- 각 연산 장치의 연산 작업들과 호스트와 디바이스 사이의 데이터 통신은 비동기적으로 실행 가능함
+    - 호스트 연산과 디바이스 연산
+    - 호스트 연산과 호스트-디바이스 사이 데이터 통신
+    - 디바이스 연산과 호스트-디바이스 사이 데이터 통신
+    - 호스트->디바이스 데이터 복사와 디바이스->호스트 데이터 복사(디바이스에 따라 다름)
+    - 서로 다른 디바이스들의 연산(디바이스가 둘 이상인 경우)
+- 비동기적 수행특성과 동시 실행능력 활용
+    - 데이터 전송과 디바이스의 연산을 중첩(overlapping)
+        - 벡터의 합과 같이 처리할 데이터들이 서로 독립적일 때, 일부 데이터가 준비되면 전체 데이터 복사를 기다리지 않고 연산
+        - 커널 실행과 데이터 통신의 중첩은 여러 개의 Non-NULL 스트림을 사용하고,
+          중첩할 작업들을 서로 다른 스트림에 넣어주는 방법으로 구현할 수 있음.
+- 동기적으로 수행되는 cuda api중 대표적인 것이 데이터 복사 api인 cudaMemcpy(),
+  따라서 연산과 데이터 중첩 전략을 사용하기 위해서는 비동기적으로 수행되는 데이터 복사 api를 사용해야함.
+    cudaError_t cudaMemcpyAsync(void* dst, const void* src, size_t size, 
+                            enum cudaMemcpyKind, cudaStream_t stream = 0);
+    - 마지막 인자로 명령을 전달할 스트림을 지정할 수 있음
+    - 해당 인자를 주지 않으면 기본 설정에 따라 NULL 스트림으로 설정됨.
+    - NULL스트림은 동기적으로 동작하므로 비동기적 데이터 복사를 하기 위해서는 반드시 Non-NULL 스트림을 사용해야함.
+    - 데이터 복사와 관련된 호스트 측 메모리 영역이 핀드 메모리(pinned memory)로 설정되어야 함.
+    - 핀드 메모리: 물리 메모리(DRAM)에 상주하는 메모리 영역, 즉 교체될 수 없는(page-locked) 메모리
+    - 동기적일 때는 데이터 통신이 끝날때까지 대기하기 떄문에 문제가 없음, 하지만 비동기에서는 호스트 입장에서
+      작업이 끝난것으로 판단하기 때문에 페이지 교체가능한 상태가 됨.
+    - 동일한 맥락에서 해당 함수를 사용하더라도 대상 호스트 메모리가 핀드 메모리가 아니라면 데이터 통신은 동기적으로 작동함.
+- 핀드 메모리 할당 및 해제
+    - 할당: cudaError_t cudaMallocHost(void** ptr, size_t size)
+    - 해제: cudaError_t cudaFreeHost(void* ptr)
+- stream 동기화
+    - 모든 스트림을 동기화: cudaError_t cudaDeviceSynchronize()
+    - 인자로 전달한 스트림에 대한 동기화: cudaError_t cudaStreamSynchronize(cudaStream_t stream)
+    - 스트림의 현재 상태 확인: cudaError_t cudaStreamQuery(cudaStream_t stream)
+        - 스트림 내 모든 작업이 완료된 경우 cudaSuccess(=0) 반환
+        - 남은 작업이 있는 경우 cudaErrorNotReady(=600) 반환
+    - 암묵적 동기화 발생하는 경우
+        - 호스트에서 핀드 메모리 할당시 - cudaMallocHost
+        - 디바이스 메모리 할당 시 - cudaMalloc
+        - 디바이스 메모리의 값을 초기화 시 - cudaMemset
+        - 같은 메모리 위치에 데이터를 복사하려 할 때
+        - NULL 스트림에 있는 명령이 수행될 때
+        - L1캐시/공유 메모리 설정 변경이 발생할 시
+
+# CUDA 이벤트
+- 스트림의 상태 확인 및 동기화를 위해 사용할 수 있는 CUDA api
+- 스트림내 명령들 사이에 끼워 놓을 수 있는 일종의 표식(marker)로 생각할 수 있음.
+- 이벤트 생성 및 제거
+    - 생성 api를 통해 명시적으로 생성해서 사용하며, 사용 후에는 제거해주어야 함.
+    - 생성: cudaError_t cudaEventCreate(cudaEvent_t *event)
+    - 제거: cudaError_t cudaEventDestroy(cudaEvent_t event)
+- 이벤트 기록: 생성한 cuda 이벤트를 스트림에 넣는 것
+    - cudaError_t cudaEventRecord(cudaEvent_t event, cudaStream_t stream = 0)
+- 이벤트 동기화: 호스트를 특정 cuda 이벤트가 발생할 때까지 대기하게 하는 것
+    - cudaError_t cudaEventSynchronize(cudaEvent_t event)
+- 이벤트 발생 여부 확인: cudaError_t cudaEventquery(cudaEvent_t event)
+- 이벤트 사이 소요시간 측정: 
+    cudaError_t cudaEventElapsedTime(float* ms, cudaEvent_t start, cudaEvent_t stop)
+- CUDA 이벤트는 스트림 내 작업 흐름에 따라 정확한 시점에 발생하기 때문에, 호스트 코드 대비 더 정확한 시간 측정 가능한
+
+# 다중 GPU 사용
+- 시스템 내 GPU 개수 확인: cudaError_t cudaGetDeviceCount(int *count)
+- 각 GPU에 할당된 번호 확인: cudaError_t cudaGetDeviceProperties(cudaDeviceProp* prop, int deviceID)
+- 사용할 GPU 선택: cudaError_t cudaSetDevice(int deviceID)
+- 특정 코드 지점에서 대상 GPU 확인: cudaError_t cudaGetDevice(int *deviceID)
